@@ -1,0 +1,253 @@
+---
+title: "陈魏娟-2024281050965-第一次作业"
+CJKmainfont: Songti SC
+author: "陈魏娟"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    fig_caption: yes
+    fig_width: 10
+    highlight: tango
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+  pdf_document:
+    latex_engine: xelatex
+  word_document:
+    toc: yes
+---
+```{r setup, include = FALSE,echo = FALSE}
+setwd("C:/Users/admin/Desktop/统计")
+knitr::opts_chunk$set(echo = FALSE,error = FALSE, warning = FALSE, message = FALSE,
+                      out.width = "100%", split = FALSE, fig.align = "center")
+#load library
+library(tidyverse)
+library(kableExtra)
+library(lubridate)
+library(scales)
+library(plotly)
+library(patchwork)
+library(ggrepel)
+```
+
+```{r}
+if (!requireNamespace("wordcloud2", quietly = TRUE)) {  
+  install.packages("wordcloud2")  
+  library(wordcloud2)  
+} else {  
+  library(wordcloud2)  
+}
+```
+
+# 你的主要发现
+
+1. 发现1 白沙洲的房子供应最多。
+
+1. 发现2 中北路附近的房屋单价最高。
+  
+1. 发现3 大多数房屋的朝向都向南。
+    
+    
+
+# 数据介绍
+
+本报告**链家**数据获取方式如下：
+    
+报告人在2023年9月12日获取了[链家武汉二手房网站](https://wh.lianjia.com/ershoufang/)数据。
+    
+- 链家二手房网站默认显示100页，每页30套房产，因此本数据包括3000套房产信息；
+    
+- 数据包括了页面可见部分的文本信息，具体字段及说明见作业说明。
+
+ **说明：**数据仅用于教学；由于不清楚链家数据的展示规则，因此数据可能并不是武汉二手房市场的随机抽样，结论很可能有很大的偏差，甚至可能是错误的。
+    
+```{r}
+# 载入数据和预处理
+library(readxl)  
+library(dplyr)  
+library(ggplot2)  
+library(tidyr)
+C<-read.csv("C:/Users/admin/Desktop/统计/2023-09-12_cleaned.csv")
+
+```
+
+
+
+
+```{r}
+C %>% 
+  head(10) %>%
+  kable(caption = "武汉链家二手房") %>% 
+  kable_styling()
+```
+
+
+各变量的简短信息：
+```{r}
+glimpse(C)
+str(C)
+names(C)
+summary(C)
+mean(C$price_sqm)
+median(C$price_sqm)
+quantile(C$price_sqm)
+range(C$price_sqm)
+IQR(C$price_sqm)
+var(C$price_sqm)
+sd(C$price_sqm)
+mad(C$price_sqm)
+```
+
+
+各变量的简短统计：
+```{r}
+summary(C)
+install.packages("wordcloud2")
+library(wordcloud2)
+region_counts <- table(C$property_region)
+wordcloud2(region_counts, size = 0.5, color = 'random-dark')
+```
+
+可以看到：
+
+- 直观结论1
+#白沙洲，盘龙城，四新，光谷东，王家湾的房源最多。
+
+- 直观结论2
+#总体来看武昌的房源比汉口的房源多。
+
+
+
+# 探索性分析
+
+## 变量1的数值描述与图形
+```{r}
+data<-C
+data%>%
+ggplot(aes(x = property_t_height, y = price_sqm))+
+geom_point() +  
+  geom_smooth(method = "lm", se = TRUE)
+```
+
+发现：楼层高低对房屋单价的影响
+
+- 发现1
+# 大多数房屋的总层数在20层左右。
+
+- 发现2 
+#单价均值随着总层数的增加而增加
+
+## 变量2的数值描述与图形
+
+```{r}
+name_top10 <- C %>%
+ group_by(property_name) %>%
+ summarise(count = n()) %>%
+ arrange(desc(count)) %>%
+ head(10)
+name_top10
+ggplot(name_top10, aes(x = property_name, y = count)) +
+ geom_bar(stat = "identity") +
+ labs(title = "出现最多次数的小区名字",
+      x = "小区名字",
+      y = "出现次数")
+```
+
+发现：2023年小区出现次数前十的名字
+
+- 发现1
+#东立国际的房源最多。
+
+- 发现2
+#前十个小区的房源都在十个以上。
+
+## 变量...的数值描述与图形
+```{r}
+data <- na.omit(C) 
+data$building_area <- as.numeric(as.character(data$building_area))
+threshold <- 100  
+data$area_category <- ifelse(data$building_area > threshold, "大面积", "小面积")
+area_counts <- table(data$area_category)
+print(area_counts) 
+area_ratio <- prop.table(area_counts)  
+print(area_ratio) 
+library(ggplot2)  
+ggplot(data, aes(x = area_category)) + geom_bar(fill = "blue") + labs(title = "房屋面积分类", x = "面积类别", y = "数量")
+```
+
+发现： 房源供应中大面积的房源多还是小面积的房源多。
+
+
+- 发现1 总体来看小面积的房源比大面积的房源多。
+
+- 发现2 小面积的房源和大面积的房源数量差距不大。
+
+## 探索问题1   
+# 房屋的位置是否影响房屋的单价，靠近地铁的房屋单价高于不靠近地铁的房屋
+
+发现：
+```{r}
+data <- C %>%  
+  distinct(property_name, .keep_all = TRUE) %>%  
+  drop_na(price_sqm, near_subway)
+data$near_subway <- as.factor(data$near_subway == "近地铁")  
+levels(data$near_subway) <- c("否", "是")
+region_popularity <- data %>%  
+  group_by(property_region) %>%  
+  summarise(num_properties = n(), .groups = "drop") %>%  
+  arrange(desc(num_properties)) 
+print(region_popularity)   
+ggplot(data, aes(x = near_subway, y = price_sqm)) +  
+  geom_boxplot()  
+  t_test_result <- t.test(price_sqm ~ near_subway, data = data)  
+print(t_test_result)
+```
+
+- 发现1 
+#  房屋的位置影响房屋的单价，靠近地铁的房屋单价高于不靠近地铁的房屋
+
+- 发现2 
+#  白沙洲近地铁的房源最多。
+
+## 探索问题2 
+# 房屋单价是否受房屋面积的影响
+
+发现:
+```{r}
+ggplot(data, aes(x = building_area, y = price_sqm)) +  
+  geom_point() +  
+  geom_smooth(method = "lm", se = TRUE)
+```
+
+- 发现1
+# 大致上来看房屋面积越大，房屋单价越高
+
+- 发现2 
+# 大多数房源房屋的面积都在100平米左右
+
+## 探索问题3 
+# 房屋单价是否受房屋精装修或毛坯的影响
+
+发现：
+```{r}
+ggplot(data, aes(x = decoration, y = price_sqm)) +  
+  geom_boxplot()
+
+```
+- 发现1 
+# 目前的房源中，精装房的数量最多
+
+- 发现2
+# 房屋单价受是否精装的影响，精装房的房屋单价均值相对而言最高。
+
+---
+
+# 发现总结
+
+用1-3段话总结你的发现。
+近几年武汉的房源供应情况以白沙洲，盘龙城等较为偏远的地方居多，市中心房源供应的情况较少，由此可见市区土地有限，人口在逐渐往郊区外扩。
+房屋的单价与房屋所在的地段，附近是否有地铁，房屋是否为精装修，房屋的层高以及房屋的面积均相关。一般在其他条件相同的情况下地段越中心，附近有地铁，房屋为精装修，楼高偏高，面积大的房屋单价越高。
+虽然房屋的单价受房屋面积的影响，面积打的房屋相对单价越高，但是小面积和大面积的市场供需来看，小面积房屋似乎更多。
+
+
